@@ -9,3 +9,12 @@ It perform Evolutionary Manifold Alignment Aware Agents (EM3A), which an algorit
 - sklearn,
 - mpi4py.
 
+# Running code
+The following command will run data-driven model with the parameters.
+
+> python main.py
+
+Below is the list of all arguments:
+
+> dataset Name of the dataset (and folders to save/load data)
+> batch_size Number of (context, target) pairs per batch
