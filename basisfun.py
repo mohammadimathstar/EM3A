@@ -6,12 +6,17 @@ import matplotlib.gridspec as gridspec
 from sklearn.neighbors import NearestNeighbors
 from numpy import linalg as LA
 import time
-import scipy.io as sio
+# import scipy.io as sio
 import random
 
 
 def LocalPCA(X):
     D = X.shape[1]
+    
+    # u, s, EigVec = np.linalg.svd(X-np.mean(X, axis=0), full_matrices=False)
+    # EigVal = np.power(s, 2) 
+    # EigVal = EigVal / np.sum(EigVal)
+    
     pca = PCA(n_components=D)
     pca.fit(X)
     EigVal = pca.singular_values_
@@ -41,11 +46,13 @@ def InitialPosition(data, radius, numofant):
     while l and (t < numofant):
         i_c = random.choice(l)
         init.append(i_c)
-        _, idx = NeighborhoodRadius(data, i_c, radius)
+        _, idx = NeighborhoodRadius(data, radius, i_c)
         for i in idx:
             if i in l:
                 l.remove(i)
         t += 1
+#        if t<numofant and l==[]:
+#            l = list(range(data.shape[0]))
     if t < numofant:
         morePos = list(np.random.randint(0, data.shape[0], numofant - t))
         for p in morePos:
@@ -53,7 +60,7 @@ def InitialPosition(data, radius, numofant):
     if len(init) != numofant:
         print('Error: number of ant is not equal to the number of initialized places')
     idx_init = np.random.permutation(init)
-
+ 
     return idx_init
 
 
@@ -67,11 +74,18 @@ def RandomSelection(Weight, NumOfUpdPerStep):
     NumUpdatePerStep = np.copy(NumOfUpdPerStep)
     if len(Weight) < NumUpdatePerStep:
         NumUpdatePerStep = len(Weight)
-        # ******** Transition probability for the next step
+    # ******** Transition probability for the next step
+    # print(np.sum(Weight))
+    if np.sum(Weight)==0:
+        print("denominator is zero")
+        print(Weight)
     P = Weight / np.sum(Weight)
     CSP = np.cumsum(P)
-    r = np.random.rand(1)
-    NextPoint = np.argwhere(CSP >= r).reshape((1,-1))[0,0]
+    r = np.random.rand(1)[0]
+    # print(r,CSP)
+    # print(r,np.argwhere(CSP>=r).reshape((1,-1)).shape)
+    # print(np.argwhere(CSP>=r).reshape((1,-1))[0,0])
+    NextPoint = (np.argwhere(CSP >= r).reshape((1,-1)))[0,0]
 
     # ********** Selection of a point for attraction
     Weight[Weight == 1] = 0.01
@@ -85,16 +99,23 @@ def RandomSelection(Weight, NumOfUpdPerStep):
     return NextPoint, AbsorptionPoint
 
 
-def NeighborhoodRadius(Data, CurrentPos, Radius):
+def NeighborhoodRadius(Data, Radius, CurrentPos=None):
     if (Data.shape[1] < 20):
         neigh = NearestNeighbors(radius=Radius, algorithm='kd_tree').fit(Data)
     else:
         neigh = NearestNeighbors(radius=Radius, algorithm='ball_tree').fit(Data)
 
-    Dd = Data[CurrentPos].reshape(1, -1)
-    indicesNN = neigh.radius_neighbors(Dd, return_distance=False)[0]
-    Neighbors = Data[indicesNN]
+    Neighbors = []
+    if CurrentPos==None:        
+        indicesNN = neigh.radius_neighbors(Data, return_distance=False) 
+        # print('idx',indicesNN[0], Radius)
+    else :
+        Dd = Data[CurrentPos].reshape(1, -1)
+        indicesNN = neigh.radius_neighbors(Dd, return_distance=False)[0]
+        Neighbors = Data[indicesNN]
+
     return Neighbors, indicesNN
+
 
 
 def NeighborhoodKNN(Data, CurrentPos, K):
@@ -121,15 +142,10 @@ def MBSMWeight(X, U, p):
 
 
 def Attraction_MBMS(X, Mean, EigVec):
+    # print('x', X)
     D = X.shape[1]
     Delta = np.dot(Mean - X, np.identity(D) - np.dot(EigVec.T, EigVec))
     return Delta
-
-# def SoftWeight(NeighborsVector,EigValue,EigVector) :
-#    Cosine = np.abs(NeighborsVector * EigVector);
-#    Cosine(isnan(Cosine)) = 0 ;
-#    Weight = (Cosine/np.sum(Cosine,2)) * EigValue ;
-#    return Weight
 
 
 def Plots(X_o, X, color, i):
@@ -166,13 +182,11 @@ def Plots(X_o, X, color, i):
         ax = fig.add_subplot(gs1[1], projection='3d')
         ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=color, s=20, cmap=plt.get_cmap('hsv'), marker=".")
         plt.xlim(MinMax[0, 0], MinMax[0, 1]), plt.ylim(MinMax[1, 0], MinMax[1, 1]), ax.set_zlim(MinMax[2, 0], MinMax[2, 1])
-        # ax.set_title("Denoised data set")
         ax.view_init(25, -120)
 
         ax = fig.add_subplot(gs1[3], projection='3d')
         ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=color, s=20, cmap=plt.get_cmap('hsv'), marker=".")
         plt.xlim(MinMax[0, 0], MinMax[0, 1]), plt.ylim(MinMax[1, 0], MinMax[1, 1]), ax.set_zlim(MinMax[2, 0], MinMax[2, 1])
-        # ax.set_title("Denoised data set")
         ax.view_init(0, -90)
     plt.show()
     time.sleep(1)
@@ -186,12 +200,13 @@ def Extract_d_r(StrategyNumber, n_k):
 
 def Generate_r(antstrategy, numofstrategies, MinRadius, MaxRadius):  # check????
     Edges = np.linspace(MinRadius, MaxRadius, numofstrategies + 1)  # .reshape((1,-1)); #check : +1
-    # d, i_r = Extract_d_r(StrategyPerAnt, n_k)
+    # print('e', antstrategy)
     Radius = np.zeros(len(antstrategy))  # .reshape((1,-1)) ;
     for i in range(numofstrategies):
         Ind = np.argwhere(antstrategy == i).T[0]
         if np.size(Ind) != 0:
             Radius[Ind] = Edges[i] + (Edges[i + 1] - Edges[i]) * np.random.rand(len(Ind))  # .reshape((1,-1)) ;
+    # print('rr',Radius)
     return Radius
 
 
@@ -215,6 +230,7 @@ def Replicator(Frequency, AntStrategy, NumOfUpdatesPerAnt, NumOfSteps):
     # Use replicator to return new frequencies of strategies
     # StrategiesPerAnt saves the strategy of each ant
     # NumOfUpdatesPerAnt save the number of update that each ant did
+    eps = 0.1 / len(Frequency) 
     Fitness = np.zeros(len(Frequency))  # .reshape((1,-1)) ; # Fitness for each strategy
     for i in range(len(Frequency)):
         if np.sum(AntStrategy == i) == 0:
@@ -223,6 +239,7 @@ def Replicator(Frequency, AntStrategy, NumOfUpdatesPerAnt, NumOfSteps):
             Fitness[i] = np.mean(NumOfUpdatesPerAnt[AntStrategy == i]) / NumOfSteps
 
     Frequency = Frequency * (Fitness - Frequency * Fitness) + Frequency
+    Frequency[Frequency<eps] = eps
     if np.sum(Frequency < 0) != 0:
         print('A frequency is negative')
     if np.sum(Frequency) == 0:
@@ -250,7 +267,7 @@ def ant_walk(data, radius, k, numofsteps, HighestWeight, NumOfUpdPerStep, learni
     # ************** Performing Ant colony
     for Loop in range(numofsteps):
         # ******** Extracting Neighbors *********
-        Neighbors, Index = NeighborhoodRadius(Data, CurrentPos, radius)
+        Neighbors, Index = NeighborhoodRadius(Data, radius, CurrentPos)
         if len(Neighbors) < k:
             Neighbors, Index = NeighborhoodKNN(Data, CurrentPos, k)
 
@@ -305,7 +322,7 @@ def onecolony(data, initialpos, radius, k, numofsteps, HighestWeight, NumOfUpdPe
     for Loop in range(numofsteps):
         for ant in range(numofants):
             # ******** Extracting Neighbors *********
-            Neighbors, Index = NeighborhoodRadius(Data, CurrentPos[ant], radius[ant])
+            Neighbors, Index = NeighborhoodRadius(Data, radius[ant], CurrentPos[ant])
             if len(Neighbors) < k:
                 Neighbors, Index = NeighborhoodKNN(Data, CurrentPos[ant], k)
 
@@ -381,15 +398,7 @@ def OneCircle_varNoise():
                                                   np.cos(2 * (t1 - np.pi / 2) / np.pi)),
                                                  axis=1) * np.random.randn(N1+N2, 2)
 
-    # t2 = np.concatenate((np.pi + np.pi * np.random.rand(N2, 1),
-    #                      np.pi / 2 + np.pi / 2 * np.random.rand(int(N2 / 8), 1)), axis=0)
-    # t2 = np.concatenate((np.pi + 1.5 * np.pi * np.random.rand(N2, 1),
-    #                      np.pi / 2 + np.pi / 2 * np.random.rand(int(N2 / 8), 1)), axis=0)
-    # data_clean_2 = 2.5 * np.concatenate((np.cos(t2), np.sin(t2)+1), axis=1)
-    # data_2 = data_clean_2 + 0.2 * np.random.randn(len(t2), 2)
-
-    # data_clean = np.concatenate((data_clean_1,data_clean_2), axis=0)
-    # data = np.concatenate((data_1, data_2), axis=0)
+    
     Plots(data_clean_1, data_1, 'g', 0)
 
     return data_clean_1, data_1
@@ -406,8 +415,6 @@ def TwoCircle_varNoise():
                                                   np.cos(2*(t1 - np.pi / 2) / np.pi)),
                                                   axis=1) * np.random.randn(N1, 2)
 
-    # t2 = np.concatenate((np.pi + np.pi * np.random.rand(N2, 1),
-    #                      np.pi / 2 + np.pi / 2 * np.random.rand(int(N2 / 8), 1)), axis=0)
     t2 = np.concatenate((np.pi + 1.5 * np.pi * np.random.rand(N2, 1),
                          np.pi / 2 + np.pi / 2 * np.random.rand(int(N2 / 8), 1)), axis=0)
     data_clean_2 = 2.5 * np.concatenate((np.cos(t2), np.sin(t2)+1), axis=1)
@@ -415,12 +422,113 @@ def TwoCircle_varNoise():
 
     data_clean = np.concatenate((data_clean_1,data_clean_2), axis=0)
     data = np.concatenate((data_1, data_2), axis=0)
-    # Plots(data_clean, data, 'g', 0)
-
+    
     return data_clean, data
 
-# TwoCircle_varNoise()
-# [d,l] = generate_spherecircle()
-# l=l.reshape((1,4600))
-# print(l.shape)
-# Plots(d,d,l,0)
+# ******************************************************************
+# *************** function for more efficient way ******************
+# ******************************************************************
+def NeighborhoodRadius_eff(Data, Radius, CurrentPos=None):
+    if (Data.shape[1] < 20):
+        neigh = NearestNeighbors(radius=Radius, algorithm='kd_tree').fit(Data)
+    else:
+        neigh = NearestNeighbors(radius=Radius, algorithm='ball_tree').fit(Data)
+
+    distancesNN, indicesNN = neigh.radius_neighbors(Data) 
+    return indicesNN, distancesNN
+
+def NeighborhoodKNN_eff(Data, CurrentPos, K):
+
+    if (Data.shape[1] < 20):
+        nbrs = NearestNeighbors(n_neighbors=K, algorithm='kd_tree').fit(Data)  # fast for low dimensional data
+    else:
+        nbrs = NearestNeighbors(n_neighbors=K, algorithm='ball_tree').fit(Data)  # fast for high-dim data
+        # nbrs = NearestNeighbors(n_neighbors=K, algorithm='brute').fit(Data)
+    distancesNN, indicesNN = nbrs.kneighbors([Data[CurrentPos]])
+    distancesNN = distancesNN[0]
+    indicesNN = indicesNN[0]
+    
+    return indicesNN, distancesNN
+
+def Generate_r_eff(numofstrategies, MinRadius, MaxRadius):  # check????
+    Edges = np.linspace(MinRadius, MaxRadius, numofstrategies + 1)  # .reshape((1,-1)); #check : +1
+    
+    Radius = np.zeros(numofstrategies)  # .reshape((1,-1)) ;
+    for i in range(numofstrategies):    
+        Radius[i] = Edges[i] + (Edges[i + 1] - Edges[i]) * np.random.rand(1)  # .reshape((1,-1)) ;
+    
+    return Radius
+
+def Attraction_eff(X, Mean, EigVec):
+    D = len(X)
+    Delta = np.dot(Mean - X, np.identity(D) - np.dot(EigVec.T, EigVec))
+    
+    return Delta
+
+def Replicator_eff(Frequency, NumOfUpdates, NumOfdata):
+    # Use replicator to return new frequencies of strategies
+    # StrategiesPerAnt saves the strategy of each ant
+    # NumOfUpdatesPerAnt save the number of update that each ant did
+    Fitness = np.zeros(len(Frequency))  # .reshape((1,-1)) ; # Fitness for each strategy
+    for i in range(len(Frequency)):        
+        Fitness[i] = NumOfUpdates[i] / NumOfdata
+    Frequency = Frequency * (Fitness - np.mean(Fitness)) + Frequency # I change here *******************
+    # Frequency = Frequency * (Fitness - Frequency * Fitness) + Frequency
+    if np.sum(Frequency < 0) != 0:
+        print('A frequency is negative')
+    if np.sum(Frequency) == 0:
+        print('all Frequencies are zero')
+    Frequency = Frequency / np.sum(Frequency)
+    return Frequency, Fitness
+
+def Diffusion(Data, radius, k, HighestWeight, sigma, learning_rate, error_thr):
+    """
+    It perform the algorithm for a colony (a set of ant) simultaneously
+    :param Data: data set, nearest neighbors, distances
+    :param initialpoint: a vector containing the starting point for each ant
+    :param numofsteps: number of steps that each ant walks
+    :param radius: an array which specifies the neighborhood size for each ant
+    :param k: minimum number of points that an ant can observe
+    :param HighestWeight: it controls how much far an ant can go from the manifold
+    :param NumOfUpdPerStep: number of samples that an ant can change in each step
+    :param learning_rate: controls the change
+    :param error_thr: it saves the output on a file
+    :return: it returns the updated (denoised) data set
+    """
+    # *************** Initialization
+    # Data = np.copy(data)
+    Data_up = np.copy(Data)
+
+    numofupdate = np.zeros(1, dtype=int)
+    numOfvisiteddim = np.zeros(Data.shape[1], dtype=int)  # .reshape((1,-1))
+
+    # *************** Nearest neighbors
+    Index, distances = NeighborhoodRadius_eff(Data, radius)
+    
+    for i in range(Data.shape[0]):
+        idx = Index[i]
+        dist = distances[i]
+        if len(idx) < k:
+            idx, dist = NeighborhoodKNN_eff(Data, i, k) 
+
+        # ************** Local PCA **************
+        EigVal, EigVec, dim, Error = LocalPCA(Data[idx])
+        # Mean = np.mean(Neighbors, axis=0)
+
+        numOfvisiteddim[dim - 1] += 1
+        if Error > error_thr:            
+            numofupdate += 1
+
+            if sigma>100:
+                Mean = np.mean(Data[idx], axis=0)
+            else:            
+                K = np.exp(- np.power(dist / sigma,2) / 2).reshape((-1,1))
+                Mean = np.sum(K * Data[idx], axis=0) / np.sum(K)
+            
+            # ****** Updating rule ******            
+            DeltaData = learning_rate * Attraction_eff(Data[i], Mean, 
+                                                        EigVec[0:dim])
+            
+            Data_up[i] += DeltaData        
+        
+    return Data_up, numofupdate, numOfvisiteddim
