@@ -34,8 +34,8 @@ learningrate = Option['etta'] / np.sqrt(Option['Radius'])
 #                                       Option['HighestWeight'], Option['NumOfUpdatePerStep'],
 #                                       learningrate[idx], Option['tau'])
 
-for colony in range(rank, Option['NumOfConlonies'], size):
-    idx = range(colony, Option['NumOfAnts'], Option['NumOfConlonies'])# Option['NumOfAntsPerColony'])
+for colony in range(rank, Option['NumOfColonies'], size):
+    idx = range(colony, Option['NumOfAnts'], Option['NumOfColonies'])# Option['NumOfAntsPerColony'])
     newdata, num_upd, num_dim = onecolony(data, Option['initialpos'][idx], Option['Radius'][idx],
                                           Option['KNNThreshold'], Option['NumOfSteps'],
                                           Option['HighestWeight'], Option['NumOfUpdatePerStep'],
